@@ -87,8 +87,7 @@ func callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var query url.Values
-
+	query := make(url.Values)
 	query.Add("access_token", token.AccessToken)
 	query.Add("refresh_token", token.RefreshToken)
 	query.Add("expiry", token.Expiry.Format(time.RFC3339))
