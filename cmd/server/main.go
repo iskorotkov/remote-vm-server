@@ -13,6 +13,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
+//nolint:gochecknoglobals
 var (
 	Host         = os.Getenv("HOST")
 	ClientID     = os.Getenv("CLIENT_ID")
@@ -39,8 +40,9 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		ClientID:     ClientID,
 		ClientSecret: ClientSecret,
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  fmt.Sprintf("%s/v1/oauth/authorize", Host),
-			TokenURL: fmt.Sprintf("%s/v1/oauth/token", Host),
+			AuthURL:   fmt.Sprintf("%s/v1/oauth/authorize", Host),
+			TokenURL:  fmt.Sprintf("%s/v1/oauth/token", Host),
+			AuthStyle: oauth2.AuthStyleAutoDetect,
 		},
 		RedirectURL: RedirectURL,
 		Scopes:      []string{"read", "write"},
@@ -56,8 +58,9 @@ func callback(w http.ResponseWriter, r *http.Request) {
 		ClientID:     ClientID,
 		ClientSecret: ClientSecret,
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  fmt.Sprintf("%s/v1/oauth/authorize", Host),
-			TokenURL: fmt.Sprintf("%s/v1/oauth/token", Host),
+			AuthURL:   fmt.Sprintf("%s/v1/oauth/authorize", Host),
+			TokenURL:  fmt.Sprintf("%s/v1/oauth/token", Host),
+			AuthStyle: oauth2.AuthStyleAutoDetect,
 		},
 		RedirectURL: RedirectURL,
 		Scopes:      []string{"read", "write"},
