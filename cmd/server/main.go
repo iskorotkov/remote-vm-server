@@ -7,7 +7,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/oauth2"
@@ -19,6 +21,7 @@ var (
 	ClientID     = os.Getenv("CLIENT_ID")
 	ClientSecret = os.Getenv("CLIENT_SECRET")
 	RedirectURL  = os.Getenv("REDIRECT_URL")
+	AppURL       = os.Getenv("APP_URL")
 )
 
 func main() {
@@ -29,7 +32,7 @@ func startHTTPServer() {
 	r := mux.NewRouter()
 	r.Use(logRequests)
 	r.HandleFunc("/api/v1/auth", auth).Methods("POST")
-	r.HandleFunc("/api/v1/callback", callback).Methods("POST")
+	r.HandleFunc("/api/v1/callback", callback).Methods("GET")
 
 	log.Println("service started listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
@@ -49,8 +52,8 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: Generate and store state.
-	url := config.AuthCodeURL("state")
-	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	redirectURL := config.AuthCodeURL("state")
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func callback(w http.ResponseWriter, r *http.Request) {
@@ -94,15 +97,24 @@ func callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err = json.Marshal(token)
+	redirectURL, err := url.Parse(AppURL)
 	if err != nil {
-		log.Printf("error serializing token: %v", err)
-		http.Error(w, "error serializing token", http.StatusInternalServerError)
+		log.Printf("error redirecting to app url: %v", err)
+		http.Error(w, "error redirecting to app url", http.StatusInternalServerError)
 
 		return
 	}
 
-	_, _ = fmt.Fprint(w, b)
+	var query url.Values
+
+	query.Add("access_token", token.AccessToken)
+	query.Add("refresh_token", token.RefreshToken)
+	query.Add("expiry", token.Expiry.Format(time.RFC3339))
+	query.Add("token_type", token.Type())
+
+	redirectURL.RawQuery = query.Encode()
+
+	http.Redirect(w, r, redirectURL.String(), http.StatusTemporaryRedirect)
 }
 
 func logRequests(h http.Handler) http.Handler {
