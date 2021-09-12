@@ -1,6 +1,6 @@
 module github.com/iskorotkov/remote-vm-server
 
-go 1.17
+go 1.16
 
 require (
 	github.com/golang/protobuf v1.4.2 // indirect
