@@ -31,7 +31,7 @@ func main() {
 func startHTTPServer() {
 	r := mux.NewRouter()
 	r.Use(logRequests)
-	r.HandleFunc("/api/v1/auth", auth).Methods("POST")
+	r.HandleFunc("/api/v1/auth", auth).Methods("GET")
 	r.HandleFunc("/api/v1/callback", callback).Methods("GET")
 
 	log.Println("service started listening on :8080")
