@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -69,27 +67,11 @@ func callback(w http.ResponseWriter, r *http.Request) {
 		Scopes:      []string{"read", "write"},
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("error reading request body: %v", err)
-		http.Error(w, "error reading request body", http.StatusBadRequest)
+	// state := r.URL.Query().Get("state")
 
-		return
-	}
+	code := r.URL.Query().Get("code")
 
-	var body struct {
-		Code string `json:"code"`
-	}
-
-	err = json.Unmarshal(b, &body)
-	if err != nil {
-		log.Printf("error parsing request body: %v", err)
-		http.Error(w, "error parsing request body", http.StatusBadRequest)
-
-		return
-	}
-
-	token, err := config.Exchange(context.Background(), body.Code)
+	token, err := config.Exchange(context.Background(), code)
 	if err != nil {
 		log.Printf("error exchanging code for tokens: %v", err)
 		http.Error(w, "error exchanging code for tokens", http.StatusInternalServerError)
