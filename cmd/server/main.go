@@ -9,8 +9,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"golang.org/x/oauth2"
+)
+
+const (
+	RedirectURLCookie = "Remote-VM-Redirect-Url"
+	StateCookie       = "Remote-VM-State"
 )
 
 //nolint:gochecknoglobals
@@ -19,7 +25,6 @@ var (
 	ClientID     = os.Getenv("CLIENT_ID")
 	ClientSecret = os.Getenv("CLIENT_SECRET")
 	RedirectURL  = os.Getenv("REDIRECT_URL")
-	AppURL       = os.Getenv("APP_URL")
 )
 
 func main() {
@@ -36,7 +41,7 @@ func startHTTPServer() {
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
 
-func auth(w http.ResponseWriter, r *http.Request) {
+func buildOAuthConfig() oauth2.Config {
 	config := oauth2.Config{
 		ClientID:     ClientID,
 		ClientSecret: ClientSecret,
@@ -49,25 +54,57 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		Scopes:      []string{"read", "write"},
 	}
 
-	// TODO: Generate and store state.
-	redirectURL := config.AuthCodeURL("state")
+	return config
+}
+
+func auth(w http.ResponseWriter, r *http.Request) {
+	config := buildOAuthConfig()
+
+	appURI := r.URL.Query().Get("redirect_url")
+
+	r.AddCookie(&http.Cookie{ //nolint:exhaustivestruct
+		Name:     RedirectURLCookie,
+		Value:    appURI,
+		Expires:  time.Now().Add(time.Hour),
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	state := uuid.New().String()
+
+	r.AddCookie(&http.Cookie{ //nolint:exhaustivestruct
+		Name:     StateCookie,
+		Value:    state,
+		Expires:  time.Now().Add(time.Hour),
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	redirectURL := config.AuthCodeURL(state)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func callback(w http.ResponseWriter, r *http.Request) {
-	config := oauth2.Config{
-		ClientID:     ClientID,
-		ClientSecret: ClientSecret,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:   fmt.Sprintf("%s/v1/oauth/authorize", Host),
-			TokenURL:  fmt.Sprintf("%s/v1/oauth/token", Host),
-			AuthStyle: oauth2.AuthStyleAutoDetect,
-		},
-		RedirectURL: RedirectURL,
-		Scopes:      []string{"read", "write"},
+	config := buildOAuthConfig()
+
+	actualState := r.URL.Query().Get("state")
+
+	expectedState, err := r.Cookie(StateCookie)
+	if err != nil {
+		log.Printf("error extracting cookie for state: %v", err)
+		http.Error(w, "error extracting cookie for state", http.StatusBadRequest)
+
+		return
 	}
 
-	// state := r.URL.Query().Get("state")
+	if actualState != expectedState.Value {
+		log.Printf("auth failed: invalid state value")
+		http.Error(w, "auth failed: invalid state value", http.StatusBadRequest)
+
+		return
+	}
 
 	code := r.URL.Query().Get("code")
 
@@ -79,7 +116,15 @@ func callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectURL, err := url.Parse(AppURL)
+	redirectURL, err := r.Cookie(RedirectURL)
+	if err != nil {
+		log.Printf("error extracting cookie for redirect url: %v", err)
+		http.Error(w, "error extracting cookie for redirect url", http.StatusBadRequest)
+
+		return
+	}
+
+	parsedURL, err := url.Parse(redirectURL.Value)
 	if err != nil {
 		log.Printf("error redirecting to app url: %v", err)
 		http.Error(w, "error redirecting to app url", http.StatusInternalServerError)
@@ -93,9 +138,9 @@ func callback(w http.ResponseWriter, r *http.Request) {
 	query.Add("expiry", token.Expiry.Format(time.RFC3339))
 	query.Add("token_type", token.Type())
 
-	redirectURL.RawQuery = query.Encode()
+	parsedURL.RawQuery = query.Encode()
 
-	http.Redirect(w, r, redirectURL.String(), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, parsedURL.String(), http.StatusTemporaryRedirect)
 }
 
 func logRequests(h http.Handler) http.Handler {
