@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	RedirectURLCookie = "Remote-VM-Redirect-Url"
-	StateCookie       = "Remote-VM-State"
+	CookieRedirectURL = "redirect_url"
+	CookieState       = "state"
 )
 
 //nolint:gochecknoglobals
@@ -63,7 +63,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	appURI := r.URL.Query().Get("redirect_url")
 
 	http.SetCookie(w, &http.Cookie{ //nolint:exhaustivestruct
-		Name:     RedirectURLCookie,
+		Name:     CookieRedirectURL,
 		Value:    appURI,
 		Expires:  time.Now().Add(time.Hour),
 		Secure:   true,
@@ -74,7 +74,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	state := uuid.New().String()
 
 	http.SetCookie(w, &http.Cookie{ //nolint:exhaustivestruct
-		Name:     StateCookie,
+		Name:     CookieState,
 		Value:    state,
 		Expires:  time.Now().Add(time.Hour),
 		Secure:   true,
@@ -91,7 +91,7 @@ func callback(w http.ResponseWriter, r *http.Request) {
 
 	actualState := r.URL.Query().Get("state")
 
-	expectedState, err := r.Cookie(StateCookie)
+	expectedState, err := r.Cookie(CookieState)
 	if err != nil {
 		log.Printf("error extracting cookie for state: %v", err)
 		http.Error(w, "error extracting cookie for state", http.StatusBadRequest)
