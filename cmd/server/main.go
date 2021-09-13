@@ -62,7 +62,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 
 	appURI := r.URL.Query().Get("redirect_url")
 
-	r.AddCookie(&http.Cookie{ //nolint:exhaustivestruct
+	http.SetCookie(w, &http.Cookie{ //nolint:exhaustivestruct
 		Name:     RedirectURLCookie,
 		Value:    appURI,
 		Expires:  time.Now().Add(time.Hour),
@@ -73,7 +73,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 
 	state := uuid.New().String()
 
-	r.AddCookie(&http.Cookie{ //nolint:exhaustivestruct
+	http.SetCookie(w, &http.Cookie{ //nolint:exhaustivestruct
 		Name:     StateCookie,
 		Value:    state,
 		Expires:  time.Now().Add(time.Hour),
