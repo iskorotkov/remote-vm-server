@@ -116,7 +116,7 @@ func callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectURL, err := r.Cookie(RedirectURL)
+	redirectURL, err := r.Cookie(CookieRedirectURL)
 	if err != nil {
 		log.Printf("error extracting cookie for redirect url: %v", err)
 		http.Error(w, "error extracting cookie for redirect url", http.StatusBadRequest)
