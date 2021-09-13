@@ -68,6 +68,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(time.Hour),
 		Secure:   true,
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 
 	state := uuid.New().String()
@@ -78,6 +79,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(time.Hour),
 		Secure:   true,
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 
 	redirectURL := config.AuthCodeURL(state)
