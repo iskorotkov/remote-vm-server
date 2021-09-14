@@ -127,8 +127,10 @@ func prepareCompletionPage(w http.ResponseWriter, parsedURL *url.URL) ([]byte, b
 	var b bytes.Buffer
 
 	err := signInCompletedTemplate.Execute(&b, struct {
-		RedirectURL string
-	}{parsedURL.String()})
+		RedirectURL template.URL
+	}{
+		RedirectURL: template.URL(parsedURL.String()), //nolint:gosec
+	})
 	if err != nil {
 		log.Printf("error preparing completion page with editor redirect url: %v", err)
 		http.Error(w, "error preparing completion page with editor redirect url", http.StatusInternalServerError)
