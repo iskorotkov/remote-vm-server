@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/iskorotkov/remote-vm-server/static/html"
 	"golang.org/x/oauth2"
 )
 
@@ -32,7 +31,7 @@ var (
 
 //nolint:gochecknoglobals
 var (
-	signInCompletedTemplate = template.Must(template.ParseFS(html.SignInCompleted, "*"))
+	signInCompletedTemplate = template.Must(template.ParseFiles("static/html/sign-in-completed.html"))
 )
 
 func main() {
