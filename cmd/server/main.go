@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/iskorotkov/remote-vm-server/static/html"
 	"golang.org/x/oauth2"
 )
 
@@ -25,6 +28,11 @@ var (
 	ClientID     = os.Getenv("CLIENT_ID")
 	ClientSecret = os.Getenv("CLIENT_SECRET")
 	RedirectURL  = os.Getenv("REDIRECT_URL")
+)
+
+//nolint:gochecknoglobals
+var (
+	signInCompletedTemplate = template.Must(template.ParseFS(html.SignInCompleted, "*"))
 )
 
 func main() {
@@ -89,23 +97,50 @@ func auth(w http.ResponseWriter, r *http.Request) {
 func callback(w http.ResponseWriter, r *http.Request) {
 	config := buildOAuthConfig()
 
-	actualState := r.URL.Query().Get("state")
+	ok := verifyState(w, r)
+	if !ok {
+		return
+	}
 
-	expectedState, err := r.Cookie(CookieState)
+	token, ok := obtainTokens(w, r, config)
+	if !ok {
+		return
+	}
+
+	parsedURL, ok := createEditorRedirectURL(w, r, token)
+	if !ok {
+		return
+	}
+
+	b, ok := prepareCompletionPage(w, parsedURL)
+	if !ok {
+		return
+	}
+
+	if _, err := w.Write(b); err != nil {
+		log.Printf("error writing confirmation page to response: %v", err)
+
+		return
+	}
+}
+
+func prepareCompletionPage(w http.ResponseWriter, parsedURL *url.URL) ([]byte, bool) {
+	var b bytes.Buffer
+
+	err := signInCompletedTemplate.Execute(&b, struct {
+		RedirectURL string
+	}{parsedURL.String()})
 	if err != nil {
-		log.Printf("error extracting cookie for state: %v", err)
-		http.Error(w, "error extracting cookie for state", http.StatusBadRequest)
+		log.Printf("error preparing completion page with editor redirect url: %v", err)
+		http.Error(w, "error preparing completion page with editor redirect url", http.StatusInternalServerError)
 
-		return
+		return nil, false
 	}
 
-	if actualState != expectedState.Value {
-		log.Printf("auth failed: invalid state value")
-		http.Error(w, "auth failed: invalid state value", http.StatusBadRequest)
+	return b.Bytes(), true
+}
 
-		return
-	}
-
+func obtainTokens(w http.ResponseWriter, r *http.Request, config oauth2.Config) (*oauth2.Token, bool) {
 	code := r.URL.Query().Get("code")
 
 	token, err := config.Exchange(context.Background(), code)
@@ -113,15 +148,19 @@ func callback(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error exchanging code for tokens: %v", err)
 		http.Error(w, "error exchanging code for tokens", http.StatusInternalServerError)
 
-		return
+		return nil, false
 	}
 
+	return token, true
+}
+
+func createEditorRedirectURL(w http.ResponseWriter, r *http.Request, token *oauth2.Token) (*url.URL, bool) {
 	redirectURL, err := r.Cookie(CookieRedirectURL)
 	if err != nil {
 		log.Printf("error extracting cookie for redirect url: %v", err)
 		http.Error(w, "error extracting cookie for redirect url", http.StatusBadRequest)
 
-		return
+		return nil, false
 	}
 
 	parsedURL, err := url.Parse(redirectURL.Value)
@@ -129,7 +168,7 @@ func callback(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error redirecting to app url: %v", err)
 		http.Error(w, "error redirecting to app url", http.StatusInternalServerError)
 
-		return
+		return nil, false
 	}
 
 	query := make(url.Values)
@@ -140,7 +179,28 @@ func callback(w http.ResponseWriter, r *http.Request) {
 
 	parsedURL.RawQuery = query.Encode()
 
-	http.Redirect(w, r, parsedURL.String(), http.StatusTemporaryRedirect)
+	return parsedURL, true
+}
+
+func verifyState(w http.ResponseWriter, r *http.Request) bool {
+	actualState := r.URL.Query().Get("state")
+
+	expectedState, err := r.Cookie(CookieState)
+	if err != nil {
+		log.Printf("error extracting cookie for state: %v", err)
+		http.Error(w, "error extracting cookie for state", http.StatusBadRequest)
+
+		return false
+	}
+
+	if actualState != expectedState.Value {
+		log.Printf("auth failed: invalid state value")
+		http.Error(w, "auth failed: invalid state value", http.StatusBadRequest)
+
+		return false
+	}
+
+	return true
 }
 
 func logRequests(h http.Handler) http.Handler {
